@@ -219,8 +219,9 @@ class Solver:
              posTag_Sentence += posTag + " "
 
              # raw_input()
+        posTag_Sentence_list = posTag_Sentence.split()
 
-        return [[[posTag_Sentence]], [[0] * len(sentence), ]]
+        return [[posTag_Sentence_list ], [[0] * len(sentence), ]]
 
 
     def hmm(self, sentence):
