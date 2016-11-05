@@ -63,7 +63,7 @@ class Solver:
         self.word_dict = dict()
         self.tag_occurence = dict()
         self.initial_state_dict = ()
-
+        self.transition_dict = dict()
     # Do the training!
     #
 
@@ -111,37 +111,52 @@ class Solver:
         # print self.initial_state_dict
         # raw_input()
 
+
+        # Intitialize Transition matrix
+        self.transition_dict = self.get_blank_dict()
+
         #Calculate transition matrix
+        for sentence in data:
+            for word_index in range(0, len(sentence[1])-1):
+                current_type = sentence[1][word_index]
+                next_type = sentence[1][word_index+1]
+                if type(self.transition_dict[current_type]) != dict:
+                    self.transition_dict[current_type] = self.get_blank_dict()
+                self.transition_dict[current_type][next_type] += 1
+
 
         #Calculate emission matrix
         for sentence in data:
             for word_index, word in enumerate(sentence[0]):
                 if word not in self.word_dict:
                     self.word_dict[word] = self.get_blank_dict()
-                if sentence[1][word_index] == Solver.WORD_DET:
-                    self.word_dict[word][Solver.WORD_DET] += 1
-                elif sentence[1][word_index] == Solver.WORD_VERB:
-                    self.word_dict[word][Solver.WORD_VERB] += 1
-                elif sentence[1][word_index] == Solver.WORD_ADP:
-                    self.word_dict[word][Solver.WORD_ADP] += 1
-                elif sentence[1][word_index] == Solver.WORD_ADV:
-                    self.word_dict[word][Solver.WORD_ADV] += 1
-                elif sentence[1][word_index] == Solver.WORD_ADJ:
-                    self.word_dict[word][Solver.WORD_ADJ] += 1
-                elif sentence[1][word_index] == Solver.WORD_NOUN:
-                    self.word_dict[word][Solver.WORD_NOUN] += 1
-                elif sentence[1][word_index] == Solver.WORD_DOT:
-                    self.word_dict[word][Solver.WORD_DOT] += 1
-                elif sentence[1][word_index] == Solver.WORD_PRON:
-                    self.word_dict[word][Solver.WORD_PRON] += 1
-                elif sentence[1][word_index] == Solver.WORD_CONJ:
-                    self.word_dict[word][Solver.WORD_CONJ] += 1
-                elif sentence[1][word_index] == Solver.WORD_PRT:
-                    self.word_dict[word][Solver.WORD_PRT] += 1
-                elif sentence[1][word_index] == Solver.WORD_NUM:
-                    self.word_dict[word][Solver.WORD_NUM] += 1
-                elif sentence[1][word_index] == Solver.WORD_X:
-                    self.word_dict[word][Solver.WORD_X] += 1
+                self.word_dict[word][sentence[1][word_index]] += 1
+
+
+                # if sentence[1][word_index] == Solver.WORD_DET:
+                #     self.word_dict[word][Solver.WORD_DET] += 1
+                # elif sentence[1][word_index] == Solver.WORD_VERB:
+                #     self.word_dict[word][Solver.WORD_VERB] += 1
+                # elif sentence[1][word_index] == Solver.WORD_ADP:
+                #     self.word_dict[word][Solver.WORD_ADP] += 1
+                # elif sentence[1][word_index] == Solver.WORD_ADV:
+                #     self.word_dict[word][Solver.WORD_ADV] += 1
+                # elif sentence[1][word_index] == Solver.WORD_ADJ:
+                #     self.word_dict[word][Solver.WORD_ADJ] += 1
+                # elif sentence[1][word_index] == Solver.WORD_NOUN:
+                #     self.word_dict[word][Solver.WORD_NOUN] += 1
+                # elif sentence[1][word_index] == Solver.WORD_DOT:
+                #     self.word_dict[word][Solver.WORD_DOT] += 1
+                # elif sentence[1][word_index] == Solver.WORD_PRON:
+                #     self.word_dict[word][Solver.WORD_PRON] += 1
+                # elif sentence[1][word_index] == Solver.WORD_CONJ:
+                #     self.word_dict[word][Solver.WORD_CONJ] += 1
+                # elif sentence[1][word_index] == Solver.WORD_PRT:
+                #     self.word_dict[word][Solver.WORD_PRT] += 1
+                # elif sentence[1][word_index] == Solver.WORD_NUM:
+                #     self.word_dict[word][Solver.WORD_NUM] += 1
+                # elif sentence[1][word_index] == Solver.WORD_X:
+                #     self.word_dict[word][Solver.WORD_X] += 1
 
 
 
