@@ -213,13 +213,14 @@ class Solver:
     # Functions for each algorithm.
     #
     def simplified(self, sentence):
-
+        posTag_Sentence = ""
         for word in sentence:
              posTag = self.get_posTag(word)
-             # print (word,posTag)
+             posTag_Sentence += posTag + " "
+
              # raw_input()
 
-        return [[["noun"] * len(sentence)], [[0] * len(sentence), ]]
+        return [[[posTag_Sentence]], [[0] * len(sentence), ]]
 
 
     def hmm(self, sentence):
