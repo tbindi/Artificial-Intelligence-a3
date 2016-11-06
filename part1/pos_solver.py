@@ -15,11 +15,16 @@ import math
 from pprint import pprint
 import copy
 from collections import Counter
+from collections import OrderedDict
+from collections import defaultdict
 
 # We've set up a suggested code structure, but feel free to change it. Just
 # make sure your code still works with the label.py and pos_scorer.py code
 # that we've supplied.
 #
+
+smooth_constant = 10e-6
+
 class Solver:
 
     WORD_DET = 'det'
@@ -43,19 +48,35 @@ class Solver:
 
     def get_blank_dict(self):
         blank_dict = dict()
-        blank_dict[Solver.WORD_DET] = 0
-        blank_dict[Solver.WORD_VERB] = 0
-        blank_dict[Solver.WORD_ADP] = 0
-        blank_dict[Solver.WORD_ADV] = 0
-        blank_dict[Solver.WORD_ADJ] = 0
-        blank_dict[Solver.WORD_NOUN] = 0
-        blank_dict[Solver.WORD_DOT] = 0
-        blank_dict[Solver.WORD_PRON] = 0
-        blank_dict[Solver.WORD_CONJ] = 0
-        blank_dict[Solver.WORD_PRT] = 0
-        blank_dict[Solver.WORD_NUM] = 0
-        blank_dict[Solver.WORD_X] = 0
+        blank_dict[Solver.WORD_DET] = smooth_constant
+        blank_dict[Solver.WORD_VERB] = smooth_constant
+        blank_dict[Solver.WORD_ADP] = smooth_constant
+        blank_dict[Solver.WORD_ADV] = smooth_constant
+        blank_dict[Solver.WORD_ADJ] = smooth_constant
+        blank_dict[Solver.WORD_NOUN] = smooth_constant
+        blank_dict[Solver.WORD_DOT] = smooth_constant
+        blank_dict[Solver.WORD_PRON] = smooth_constant
+        blank_dict[Solver.WORD_CONJ] = smooth_constant
+        blank_dict[Solver.WORD_PRT] = smooth_constant
+        blank_dict[Solver.WORD_NUM] = smooth_constant
+        blank_dict[Solver.WORD_X] = smooth_constant
         return blank_dict
+
+    def get_blank_dict_viterbi(self):
+        blank_dict_viterbi = OrderedDict()
+        blank_dict_viterbi[Solver.WORD_DET] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_VERB] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_ADP] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_ADV] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_ADJ] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_NOUN] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_DOT] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_PRON] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_CONJ] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_PRT] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_NUM] = [smooth_constant,0]
+        blank_dict_viterbi[Solver.WORD_X] = [smooth_constant,0]
+        return blank_dict_viterbi
 
 
 
@@ -64,6 +85,7 @@ class Solver:
         self.tag_occurence = dict()
         self.initial_state_dict = ()
         self.transition_dict = dict()
+        self.viterbi_matrix_dict = OrderedDict()
     # Do the training!
     #
 
@@ -71,51 +93,22 @@ class Solver:
 
     def train(self, data):
         #Calculate the tag occurence :-
+        #Creates a dict of all tags and number of times they occurred in the train data set
         self.cal_Tag_Occurence(data)
 
         #Calculate initial state matrix :-
+        #Creates a dict of tags and number of times they occured at the start of the sentence.
         self.initial_state_dict = {}
         for sentence in data:
-            tag = ""
-            # print sentence[1][0]
             tag = str(sentence[1][0])
-            # print type(tag)
-            # print tag
-            # raw_input()
             if tag not in self.initial_state_dict:
-                self.initial_state_dict[tag] = 1
-            if tag == Solver.WORD_DET:
-                self.initial_state_dict[tag] += 1
-            elif tag == Solver.WORD_VERB:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_ADP:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_ADV:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_ADJ:
-                self.initial_state_dict[tag] += 1
-            elif tag == Solver.WORD_NOUN:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_DOT:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_PRON:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_CONJ:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_PRT:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_NUM:
-                self.initial_state_dict[tag] += 1
-            elif tag  == Solver.WORD_X:
-                self.initial_state_dict[tag] += 1
-        # print self.initial_state_dict
-        # raw_input()
-
+                self.initial_state_dict[tag] = smooth_constant
+            self.initial_state_dict[tag] += 1
 
         # Intitialize Transition matrix
         self.transition_dict = self.get_blank_dict()
-
         #Calculate transition matrix
+        #Creates a dict of all tag transitions combination : - noun to noun, noun to verb, etc
         for sentence in data:
             for word_index in range(0, len(sentence[1])-1):
                 current_type = sentence[1][word_index]
@@ -126,6 +119,7 @@ class Solver:
 
 
         #Calculate emission matrix
+        #Creates a dict of all words in train data and the number of times they occurred as a tag = noun,verb,etc.
         for sentence in data:
             for word_index, word in enumerate(sentence[0]):
                 if word not in self.word_dict:
@@ -133,39 +127,9 @@ class Solver:
                 self.word_dict[word][sentence[1][word_index]] += 1
 
 
-                # if sentence[1][word_index] == Solver.WORD_DET:
-                #     self.word_dict[word][Solver.WORD_DET] += 1
-                # elif sentence[1][word_index] == Solver.WORD_VERB:
-                #     self.word_dict[word][Solver.WORD_VERB] += 1
-                # elif sentence[1][word_index] == Solver.WORD_ADP:
-                #     self.word_dict[word][Solver.WORD_ADP] += 1
-                # elif sentence[1][word_index] == Solver.WORD_ADV:
-                #     self.word_dict[word][Solver.WORD_ADV] += 1
-                # elif sentence[1][word_index] == Solver.WORD_ADJ:
-                #     self.word_dict[word][Solver.WORD_ADJ] += 1
-                # elif sentence[1][word_index] == Solver.WORD_NOUN:
-                #     self.word_dict[word][Solver.WORD_NOUN] += 1
-                # elif sentence[1][word_index] == Solver.WORD_DOT:
-                #     self.word_dict[word][Solver.WORD_DOT] += 1
-                # elif sentence[1][word_index] == Solver.WORD_PRON:
-                #     self.word_dict[word][Solver.WORD_PRON] += 1
-                # elif sentence[1][word_index] == Solver.WORD_CONJ:
-                #     self.word_dict[word][Solver.WORD_CONJ] += 1
-                # elif sentence[1][word_index] == Solver.WORD_PRT:
-                #     self.word_dict[word][Solver.WORD_PRT] += 1
-                # elif sentence[1][word_index] == Solver.WORD_NUM:
-                #     self.word_dict[word][Solver.WORD_NUM] += 1
-                # elif sentence[1][word_index] == Solver.WORD_X:
-                #     self.word_dict[word][Solver.WORD_X] += 1
 
 
-
-        # for word in self.word_dict:
-        #     pprint(word)
-        #     pprint(self.word_dict[word])
-
-        # pprint(self.word_dict['the'])
-
+    #Creates a dicitionary with each tag and the number of times it occurred in the train dataset.
     def cal_Tag_Occurence(self, data):
         tag_occurence = {}
         tag_list = []
@@ -175,21 +139,22 @@ class Solver:
         tag_flist = [item for sublist in tag_list for item in sublist]
 
         self.tag_occurence = dict(Counter(tag_flist))
+
+        for i in self.tag_occurence:
+            self.tag_occurence[i] += smooth_constant
+        # raw_input()
         return
 
-    def get_posTag(self,w):
+    #Calculate pos tag for a word by Simple method
+    def get_posTagSimple(self,w):
         # Dict of emission probabily for that word
         word_dict = copy.deepcopy(self.word_dict.get(w))
-        # print "word_dict",word_dict
+        # raw_input()
         if word_dict == None:
-            return "na"
+            return "na",0.0
 
         word_eprob_dict = {}
-        # print w
-        # print word_dict
 
-        max_tag_occurence_dict = copy.deepcopy(self.tag_occurence)
-        # print "max tag occurence",max_tag_occurence_dict
         #Get the total occurence of word
         max_word_occurence = 0
         max_word_occurence = sum(word_dict.values())
@@ -197,35 +162,156 @@ class Solver:
         #Compute emission probabilty of all pos tags for the word
         for key,value in word_dict.items():
             max_tag = 0
-            max_tag = max_tag_occurence_dict.get(key)
-            word_eprob_dict[key] = (float(value)/max_word_occurence) * (float(value)/max_tag)
-        # print word_eprob_dict
-        # raw_input()
-        #Return max emission probability pos tag
+            max_tag = self.tag_occurence.get(key)
+            word_eprob_dict[key] = ((float(value)/max_word_occurence)) * ((float(value)/max_tag))
+
         posTag = max(word_eprob_dict, key=word_eprob_dict.get)
+        posprob = round(max(word_eprob_dict.values()),2)
 
-        return posTag
+        return posTag,posprob
+
+    #Calculate emission prob for a word
+    def get_emission(self,word1,tag_row,sentence):
+        # Dict of emission probabily for that word
+        word = 0
+        emission_prob = 0
+        emission_value = 0
+        word = sentence[word1]
+        emission_value = copy.deepcopy(self.word_dict[word].get(tag_row))
+        word_dict = {}
+        if emission_value == None:
+            return smooth_constant
+
+        word_eprob_dict = {}
+
+        #Get the total occurence of word
+        max_tag_occurence = self.tag_occurence.get(tag_row)
+        emission_prob = ((float(emission_value)/ max_tag_occurence))
+
+        return emission_prob
 
 
+    def get_initial_prob(self,key):
+        key_occurred = 0
+        initial_key = 0
+        initial_prob = 0
+        key_occurred = self.tag_occurence[key]
+        initial_key = self.initial_state_dict[key]
+        initial_prob = ((float(initial_key)/key_occurred))
+        return initial_prob
+
+
+    def get_max_viterbi(self,index,tag,sentence):
+        max_transition_viterbi = defaultdict(float)
+        viterbi_column = copy.deepcopy(self.viterbi_matrix_dict.get(index))
+
+        if viterbi_column == None:
+            return -math.log10(smooth_constant),tag
+
+        for i in viterbi_column:
+            try:
+                max_transition_viterbi[i] = self.viterbi_matrix_dict[index][i][0] - math.log10(self.get_transition_prob_viterbi(i,tag)) - math.log10(self.get_emission(index+1,tag,sentence))
+            except:
+
+                max_transition_viterbi[i] = self.viterbi_matrix_dict[index][i][0] - math.log10(self.get_transition_prob_viterbi(i,tag)) - math.log10(smooth_constant)
+
+        posTag = min(max_transition_viterbi, key=max_transition_viterbi.get)
+        posprob = min(max_transition_viterbi.values())
+        return posprob,posTag
+
+
+    #Return transition probability given 2 tags
+    def get_transition_prob_viterbi(self,i,tag):
+        temp = 0
+        temp = float(self.transition_dict[i][tag])/self.tag_occurence.get(tag)
+        if temp == 0.0:
+            return smooth_constant
+        else : return temp
+
+    def backTrack_viterbi(self,sentence):
+        n = len(sentence)
+        max_last_col = self.viterbi_matrix_dict.get(n-1)
+        tag = min(max_last_col, key=max_last_col.get)
+        # posprob = min(max_last_col.values())
+        tagsequence = []
+        tagsequence.insert(0,tag)
+        for i in range(n-1,0,-1):
+            # print "vitebi matrix", self.viterbi_matrix_dict[i]
+            tag = self.viterbi_matrix_dict[i][tag][1]
+            tagsequence.insert(0,tag)
+
+        return tagsequence
 
 
 
     # Functions for each algorithm.
     #
     def simplified(self, sentence):
-        posTag_Sentence = ""
+        posTag_Sentence = []
+        posTag_Prob = []
         for word in sentence:
-             posTag = self.get_posTag(word)
-             posTag_Sentence += posTag + " "
+             posTag,posprob = self.get_posTagSimple(word)
+             posTag_Sentence.append(posTag)
+             posTag_Prob.append(posprob)
 
-             # raw_input()
-        posTag_Sentence_list = posTag_Sentence.split()
+        return [[posTag_Sentence ], [posTag_Prob , ]]
 
-        return [[posTag_Sentence_list ], [[0] * len(sentence), ]]
 
 
     def hmm(self, sentence):
-        return [ [ [ "noun" ] * len(sentence)], [] ]
+        self.viterbi_matrix_dict ={}
+        sentence_copy = copy.deepcopy(sentence)
+        n = len(sentence)
+        temp_dict = {}
+        #Initialize a blank viterbi matrix
+        for index,word in enumerate(sentence):
+            if index not in self.viterbi_matrix_dict:
+                self.viterbi_matrix_dict[index] = self.get_blank_dict_viterbi()
+
+
+        #get the first word in the sentence
+        first_word = 0
+
+        #calculate the first column of the matrix
+        for tag_row in self.viterbi_matrix_dict[first_word]:
+            value = 0
+            emission = 0
+            value = -math.log10( self.get_initial_prob(tag_row))
+
+            try:
+                emission = -math.log10( self.get_emission(first_word,tag_row,sentence))
+                temp = value + emission
+                self.viterbi_matrix_dict[first_word][tag_row][0] = temp
+                self.viterbi_matrix_dict[first_word][tag_row][1] = "start"
+            except:
+                print "in except"
+
+
+
+
+        #calculate the whole viterbi matrix
+        for word_col in self.viterbi_matrix_dict:
+            if int(word_col)>0:
+                for tag_row in self.viterbi_matrix_dict[word_col]:
+                    max_transition,posTag = self.get_max_viterbi(word_col-1,tag_row,sentence)
+                    if max_transition == 0.0:
+                        self.viterbi_matrix_dict[word_col][tag_row][1] = posTag
+                        self.viterbi_matrix_dict[word_col][tag_row][0] = -math.log10(smooth_constant)
+                    else:
+                        self.viterbi_matrix_dict[word_col][tag_row][1] = posTag
+                        self.viterbi_matrix_dict[word_col][tag_row][0] = (max_transition)
+
+
+        Tag_Sequence = 0
+        Tag_Sequence = tuple(self.backTrack_viterbi(sentence))
+        # print Tag_Sequence
+        # raw_input()
+        return [  [Tag_Sequence ] , [] ]
+
+
+
+
+
 
     def complex(self, sentence):
         return [ [ [ "noun" ] * len(sentence)], [[0] * len(sentence),] ]
