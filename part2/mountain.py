@@ -8,9 +8,8 @@ from PIL import Image
 from numpy import *
 from scipy.ndimage import filters
 from scipy.misc import imsave
-import sys
 import numpy as np
-from copy import deepcopy
+import random
 
 
 # calculate "Edge strength map" of an image
@@ -49,67 +48,79 @@ def distribution(data):
     return probability_dist
 
 
-def get_init_state(data):
-    return data.argmax(axis=0).tolist()
+def get_random_col():
+    return random.randint(0, m-1)
 
 
-def total_probability(sample_i, prob_dist):
-    return sum([prob_dist[sample_i[x]][x] for x in range(0, len(sample_i))])
+def get_probability(prob_dist, row, col, row1, col1):
+    return prob_dist[row1][col1] / (1 + abs(row1 - row))
 
 
-def get_probability(row, col, prob_dist, state):
-    if col > 0 and col < m-1:
-        return (prob_dist[row][col] * n * 2) / 10*(1 + abs(state[col-1] - state[col]) + abs(state[col+1] - state[col]))
-    elif col == 0:
-        return (prob_dist[row][col] * n) / 10*(1 + abs(state[col+1] - state[col]))
-    elif col == m-1:
-        return (prob_dist[row][col] * n) / 10*(1 + abs(state[col-1] - state[col]))
+def get_max_row(edge_weight, col):
+    return np.argmax(edge_weight[:, col])
 
 
-# data = [ Edge Weight ]
-# prob_dist = [ Probability Distribution ]
-# sample = [ row_numbers ]
-def gibbs_sample(edge_s, prob_dist, sample, T, row_list):
-    for t in range(1, T):
-        sample.append(sample[t-1])
-        max_total_prob = sample[t]["PROB"]
-        max_total_state = sample[t]["STATE"]
-        for col in range(0, m):
-            max_col_prob = -1
-            max_state = deepcopy(max_total_state)
-            for row in row_list[col]:
-                cur_state = deepcopy(max_state)
-                cur_state[col] = row
-                cur_col_prob = get_probability(row, col, prob_dist, cur_state)
-                if cur_col_prob > max_col_prob:
-                    max_col_prob = cur_col_prob
-                    max_state = cur_state
-            cur_total_probability = total_probability(max_state, prob_dist)
-            if cur_total_probability > max_total_prob:
-                max_total_prob = cur_total_probability
-                max_total_state = max_state
-        sample[t] = {"PROB": max_total_prob, "STATE": max_total_state}
+def get_top_row(edge_weight, col, top):
+    return edge_weight[:, col].argsort()[-top:][::-1]
+
+
+def create_sample(prob_dist, edge_weight, rand_col, top_rows):
+    sample = np.zeros((m, ), dtype=np.int)
+    prev_row = get_max_row(edge_weight, rand_col)
+    sample[rand_col] = prev_row
+    # Move Ahead
+    for col in range(rand_col+1, m):
+        max_prob = -1
+        max_row = -1
+        prev_col = col-1
+        for row in get_top_row(edge_weight, col, top_rows):
+            cur_prob = get_probability(prob_dist, prev_row, prev_col, row, col)
+            if max_prob < cur_prob:
+                max_prob = cur_prob
+                max_row = row
+        prev_row = max_row
+        sample[col] = max_row
+
+    prev_row = get_max_row(edge_weight, rand_col)
+    # Move behind
+    for col in range(rand_col-1, -1, -1):
+        max_prob = -1
+        max_row = -1
+        prev_col = col - 1
+        for row in get_top_row(edge_weight, col, top_rows):
+            cur_prob = get_probability(prob_dist, prev_row, prev_col, row, col)
+            if max_prob < cur_prob:
+                max_prob = cur_prob
+                max_row = row
+        prev_row = max_row
+        sample[col] = max_row
     return sample
 
 
-def get_top_column(edge_strengt, top):
-    return [col.argsort()[-top:][::-1] for col in edge_strengt.T]
+def gibbs_sample(iter, edge_weight, top_rows):
+    result = np.zeros(shape=(iter, m), dtype=np.int)
+    for i in range(0, iter):
+        rand_col = get_random_col()
+        result[i] = create_sample(prob_dist, edge_weight, rand_col, top_rows)
+    return result
 
 
 # main program
 #
 # (input_filename, output_filename, gt_row, gt_col) = sys.argv[1:]
-inp_data = [["test_images/mountain.jpg", "mountain_out.jpg"],]
-                # ["test_images/mountain2.jpg", "out/mountain_out2.jpg"],
-                # ["test_images/mountain3.jpg", "out/mountain_out3.jpg"],
-                # ["test_images/mountain4.jpg", "out/mountain_out4.jpg"],
-                # ["test_images/mountain5.jpg", "out/mountain_out5.jpg"],
-                # ["test_images/mountain6.jpg", "out/mountain_out6.jpg"],
-                # ["test_images/mountain7.jpg", "out/mountain_out7.jpg"],
-                # ["test_images/mountain8.jpg", "out/mountain_out8.jpg"],
-                # ["test_images/mountain9.jpg", "out/mountain_out9.jpg"]]
+inp_data = [["test_images/mountain.jpg", "out/mountain_out.jpg"],
+                ["test_images/mountain2.jpg", "out/mountain_out2.jpg"],
+                ["test_images/mountain3.jpg", "out/mountain_out3.jpg"],
+                ["test_images/mountain4.jpg", "out/mountain_out4.jpg"],
+                ["test_images/mountain5.jpg", "out/mountain_out5.jpg"],
+                ["test_images/mountain6.jpg", "out/mountain_out6.jpg"],
+                ["test_images/mountain7.jpg", "out/mountain_out7.jpg"],
+                ["test_images/mountain8.jpg", "out/mountain_out8.jpg"],
+                ["test_images/mountain9.jpg", "out/mountain_out9.jpg"]]
 m = -1
 n = -1
+iterations = 50
+top_rows = 100
 # load in image
 for i in inp_data:
     input_image = Image.open(i[0])
@@ -120,12 +131,15 @@ for i in inp_data:
 
     # You'll need to add code here to figure out the results! For now,
     # just create a horizontal centered line.
-    init_ridge = get_init_state(edge_strengt)
 
     prob_dist = distribution(edge_strengt)
     (n, m) = edge_strengt.shape
-    sample = [{"PROB": total_probability(init_ridge, prob_dist), "STATE": init_ridge}]
-    final_ridge = gibbs_sample(edge_strengt, prob_dist, sample, 10, get_top_column(edge_strengt, 5))
+    max_ridge = edge_strengt.argmax(axis=0).tolist()
+    samples = gibbs_sample(iterations, edge_strengt, top_rows)
+    final_ridge = np.zeros((m,), dtype=np.int)
+    for j in range(0, m):
+        final_ridge[j] = np.bincount(samples[:, j]).argmax()
 
     # output answer
-    imsave(i[1], draw_edge(input_image, final_ridge[-1]["STATE"], (255, 0, 0), 5))
+    imsave(i[1], draw_edge(input_image, max_ridge, (255, 0, 0), 5))
+    imsave(i[1], draw_edge(input_image, final_ridge.tolist(), (0, 0, 255), 5))
