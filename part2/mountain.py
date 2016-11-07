@@ -10,6 +10,7 @@ from scipy.ndimage import filters
 from scipy.misc import imsave
 import numpy as np
 import random
+import sys
 
 
 # calculate "Edge strength map" of an image
@@ -17,7 +18,7 @@ import random
 def edge_strength(input_image):
     grayscale = array(input_image.convert('L'))
     filtered_y = zeros(grayscale.shape)
-    filters.sobel(grayscale,0,filtered_y)
+    filters.sobel(grayscale, 0, filtered_y)
     return filtered_y**2
 
 
@@ -52,8 +53,13 @@ def get_random_col():
     return random.randint(0, m-1)
 
 
-def get_probability(prob_dist, row, col, row1, col1):
-    return prob_dist[row1][col1] / (1 + abs(row1 - row))
+def get_probability(prob_dist, row, col, row1, col1, edge_weight, flag):
+    if flag:
+        return prob_dist[row1][col1] / ((1 + abs(row1 - row)) * (1 + abs(
+            (edge_weight[row1][col1])/np.sum(edge_weight[:, col1]) -
+            (edge_weight[row][col])/np.sum(edge_weight[:, col]))))
+    else:
+        return prob_dist[row1][col1] / (1 + abs(row1 - row))
 
 
 def get_max_row(edge_weight, col):
@@ -64,9 +70,8 @@ def get_top_row(edge_weight, col, top):
     return edge_weight[:, col].argsort()[-top:][::-1]
 
 
-def create_sample(prob_dist, edge_weight, rand_col, top_rows):
+def create_sample(prob_dist, edge_weight, rand_col, prev_row, top_rows, flag):
     sample = np.zeros((m, ), dtype=np.int)
-    prev_row = get_max_row(edge_weight, rand_col)
     sample[rand_col] = prev_row
     # Move Ahead
     for col in range(rand_col+1, m):
@@ -74,7 +79,8 @@ def create_sample(prob_dist, edge_weight, rand_col, top_rows):
         max_row = -1
         prev_col = col-1
         for row in get_top_row(edge_weight, col, top_rows):
-            cur_prob = get_probability(prob_dist, prev_row, prev_col, row, col)
+            cur_prob = get_probability(prob_dist, prev_row, prev_col, row,
+                                       col, edge_weight, flag)
             if max_prob < cur_prob:
                 max_prob = cur_prob
                 max_row = row
@@ -88,7 +94,8 @@ def create_sample(prob_dist, edge_weight, rand_col, top_rows):
         max_row = -1
         prev_col = col - 1
         for row in get_top_row(edge_weight, col, top_rows):
-            cur_prob = get_probability(prob_dist, prev_row, prev_col, row, col)
+            cur_prob = get_probability(prob_dist, prev_row, prev_col, row,
+                                       col, edge_weight, flag)
             if max_prob < cur_prob:
                 max_prob = cur_prob
                 max_row = row
@@ -97,31 +104,31 @@ def create_sample(prob_dist, edge_weight, rand_col, top_rows):
     return sample
 
 
-def gibbs_sample(iter, edge_weight, top_rows):
+def gibbs_sample(iter, edge_weight, top_rows, gt_row, gt_col):
     result = np.zeros(shape=(iter, m), dtype=np.int)
+    flag = False
+    if gt_col != -1:
+        flag = True
     for i in range(0, iter):
-        rand_col = get_random_col()
-        result[i] = create_sample(prob_dist, edge_weight, rand_col, top_rows)
+        rand_col = get_random_col() if gt_col == -1 else int(gt_col)
+        prev_row = get_max_row(edge_weight, rand_col) if gt_row == -1 else \
+            int(gt_row)
+        result[i] = create_sample(prob_dist, edge_weight, rand_col, prev_row,
+                                  top_rows, flag)
     return result
 
 
 # main program
 #
-# (input_filename, output_filename, gt_row, gt_col) = sys.argv[1:]
-inp_data = [["test_images/mountain.jpg", "out/mountain_out.jpg"],
-                ["test_images/mountain2.jpg", "out/mountain_out2.jpg"],
-                ["test_images/mountain3.jpg", "out/mountain_out3.jpg"],
-                ["test_images/mountain4.jpg", "out/mountain_out4.jpg"],
-                ["test_images/mountain5.jpg", "out/mountain_out5.jpg"],
-                ["test_images/mountain6.jpg", "out/mountain_out6.jpg"],
-                ["test_images/mountain7.jpg", "out/mountain_out7.jpg"],
-                ["test_images/mountain8.jpg", "out/mountain_out8.jpg"],
-                ["test_images/mountain9.jpg", "out/mountain_out9.jpg"]]
+gt_row = -1
+gt_col = -1
+(input_filename, output_filename, gt_row, gt_col) = sys.argv[1:]
 m = -1
 n = -1
-iterations = 50
+iterations = 30
 top_rows = 100
 # load in image
+inp_data = [[input_filename, output_filename]]
 for i in inp_data:
     input_image = Image.open(i[0])
 
@@ -134,12 +141,21 @@ for i in inp_data:
 
     prob_dist = distribution(edge_strengt)
     (n, m) = edge_strengt.shape
+
+    # Red Line
     max_ridge = edge_strengt.argmax(axis=0).tolist()
-    samples = gibbs_sample(iterations, edge_strengt, top_rows)
+
+    # Blue Line
+    samples = gibbs_sample(iterations, edge_strengt, top_rows, -1, -1)
     final_ridge = np.zeros((m,), dtype=np.int)
     for j in range(0, m):
         final_ridge[j] = np.bincount(samples[:, j]).argmax()
 
+    # Green Line
+    green_ridge = gibbs_sample(1, edge_strengt, top_rows, gt_row, gt_col)
+
     # output answer
     imsave(i[1], draw_edge(input_image, max_ridge, (255, 0, 0), 5))
     imsave(i[1], draw_edge(input_image, final_ridge.tolist(), (0, 0, 255), 5))
+    imsave(i[1], draw_edge(input_image, green_ridge[0].tolist(), (0, 255, 0),
+                           5))
