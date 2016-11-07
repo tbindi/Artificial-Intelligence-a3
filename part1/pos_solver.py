@@ -2,12 +2,59 @@
 # CS B551 Fall 2016, Assignment #3
 #
 # Your names and user ids:
+# Mohit Galvankar mgalvank
+# Supreet S sushivan
+# Thanmai Bindia tbindi
 #
 # (Based on skeleton code by D. Crandall)
 #
 #
 ####
-# Put your report here!!
+''''''''''
+
+# Report
+
+1.a)Initialized all the needed states
+Initial state = #Creates a dict of tags and number of times they occured at the start of the sentence.
+Emission state = #Creates a dict of all words in train data and the number of times they occurred as a tag = noun,verb,etc.
+Transition state =  #Creates a dict of all tag transitions combination : - noun to noun, noun to verb, etc
+All the above state tables are not probabilities just counts. Probabilities are calculated when needed.
+
+1.b)Simple model
+For simple model,given a sentence:
+    for each word in sentence:
+        for each tag :
+            calculate the max(no of times the word occured as a tag/no of times the word occured) and assign that tag to the word
+If word not in database, return a new tag as "na"
+
+
+1.c)HMM model
+Implemented a viterbi algorithm.
+Initialize a viterbi matrix of N x T where is N is the words in the sentence and T is the number of tags.
+This viterbi matrix is a dictionary of dictionary where each word is the main dictionary and has a dictionary with all tags as keys, assigned
+as values.
+Algorithm:-
+First compute the first col of the matrix.
+For each tag in the first word:
+    assigned that tag a value = initial probability of that tag * emission probability of that word
+
+For each word in viterbi matrix from the second word in sentence:
+    for each tag in each word:
+        compute max ( previous word value in word[tag] * transition probability from previous word[tag] to current word[tag] * emission probability of current word
+        also tag each state with the tag represented by the max calculated above inorder to backtrack.
+
+After the matrix is generated, backtrack from the last col in matrix and append all tags for each word and return tag tuple.
+
+
+1.d.)Complex model
+For complex model, computed the current word[tag] value based on the max of all the possible combination of tags in previous two words. Similar to viterbi but comparing last two words.
+Basically used a trigram model. Computed a 12x12 tag transition matrix for each word[tag] value computation and multipled each by that specific state probability
+and also the emission probability of current state.
+
+Reference :-
+Referred to below video for viterbi algorithm concept clearance :-
+https://www.youtube.com/watch?v=O_q82UMtjoM
+'''''''''
 ####
 
 import random
@@ -44,7 +91,23 @@ class Solver:
     # Calculate the log of the posterior probability of a given sentence
     #  with a given part-of-speech labeling
     def posterior(self, sentence, label):
-        return 0
+        prob = -math.log(smooth_constant)
+        initial = -math.log(self.get_initial_prob(label[0])) - math.log(self.get_emission(0, label[0], sentence))
+        for index in range(1,len(sentence)):
+            try:
+                emission = -math.log(self.get_emission(index,label[index],sentence))
+            except:
+                emission = -math.log(smooth_constant)
+            try:
+                if 'na' in label:
+                    transition = -math.log(smooth_constant)
+                else:
+                    transition = -math.log(self.get_transition_prob_complex(label[index-1],label[index]))
+            except:
+                transition = -math.log(smooth_constant)
+            prob -= emission * transition
+        prob -= initial
+        return prob
 
     def get_blank_dict(self):
         blank_dict = dict()
@@ -80,12 +143,16 @@ class Solver:
 
 
 
+
     def __init__(self):
         self.word_dict = dict()
         self.tag_occurence = dict()
         self.initial_state_dict = ()
         self.transition_dict = dict()
+        self.transition_dict_complex = dict()
         self.viterbi_matrix_dict = OrderedDict()
+        self.complex_matrix_dict = OrderedDict()
+        self.transition_dict_complex2 = dict()
     # Do the training!
     #
 
@@ -116,6 +183,36 @@ class Solver:
                 if type(self.transition_dict[current_type]) != dict:
                     self.transition_dict[current_type] = self.get_blank_dict()
                 self.transition_dict[current_type][next_type] += 1
+
+        # Intitialize Transition complex matrix
+        self.transition_dict_complex = self.get_blank_dict()
+        # Calculate transition matrix
+        # Creates a dict of all tag transitions combination : - noun to noun skipping a word, noun to verb, etc
+        for sentence in data:
+            for word_index in range(0, len(sentence[1]) - 2):
+                current_type = sentence[1][word_index]
+                next_type = sentence[1][word_index + 2]
+                if type(self.transition_dict_complex[current_type]) != dict:
+                    self.transition_dict_complex[current_type] = self.get_blank_dict()
+                self.transition_dict_complex[current_type][next_type] += 1
+
+        # Intitialize Transition complex matrix 2
+        self.transition_dict_complex2 = {}
+        # Calculate transition matrix
+        # Creates a dict of all tag transitions combination : - noun to noun skipping a word, noun to verb, etc
+        for sentence in data:
+            for word_index in range(2, len(sentence[1])):
+                # print sentence[1]
+                # print word_index
+                prev1 = sentence[1][word_index-2]
+                prev2 = sentence[1][word_index - 1]
+                current = sentence[1][word_index]
+                prev = prev1 + prev2
+
+                if self.transition_dict_complex2.get(prev)==None:
+                    self.transition_dict_complex2[prev] = self.get_blank_dict()
+                self.transition_dict_complex2[prev][current] += 1
+
 
 
         #Calculate emission matrix
@@ -151,7 +248,7 @@ class Solver:
         word_dict = copy.deepcopy(self.word_dict.get(w))
         # raw_input()
         if word_dict == None:
-            return "na",0.0
+            return "noun",0.5
 
         word_eprob_dict = {}
 
@@ -163,7 +260,8 @@ class Solver:
         for key,value in word_dict.items():
             max_tag = 0
             max_tag = self.tag_occurence.get(key)
-            word_eprob_dict[key] = ((float(value)/max_word_occurence)) * ((float(value)/max_tag))
+            # *((float(value) / max_tag))
+            word_eprob_dict[key] = ((float(value)/max_word_occurence))
 
         posTag = max(word_eprob_dict, key=word_eprob_dict.get)
         posprob = round(max(word_eprob_dict.values()),2)
@@ -177,12 +275,15 @@ class Solver:
         emission_prob = 0
         emission_value = 0
         word = sentence[word1]
-        emission_value = copy.deepcopy(self.word_dict[word].get(tag_row))
-        word_dict = {}
+        emission_value_dict = copy.deepcopy(self.word_dict.get(word))
+        if emission_value_dict == None:
+            return smooth_constant
+
+        emission_value = emission_value_dict.get(tag_row)
+
         if emission_value == None:
             return smooth_constant
 
-        word_eprob_dict = {}
 
         #Get the total occurence of word
         max_tag_occurence = self.tag_occurence.get(tag_row)
@@ -206,7 +307,7 @@ class Solver:
         viterbi_column = copy.deepcopy(self.viterbi_matrix_dict.get(index))
 
         if viterbi_column == None:
-            return -math.log10(smooth_constant),tag
+            return -math.log10(smooth_constant),"noun"
 
         for i in viterbi_column:
             try:
@@ -220,6 +321,40 @@ class Solver:
         return posprob,posTag
 
 
+    def get_max_viterbi_complex(self,index,tag,sentence):
+        max_transition_complex = defaultdict(float)
+        viterbi_column = copy.deepcopy(self.complex_matrix_dict.get(index))
+
+        if viterbi_column == None:
+            return -math.log10(smooth_constant)
+        for i in viterbi_column:
+            try:
+                max_transition_complex[i] = self.complex_matrix_dict[index][i] - math.log10(self.get_transition_prob_viterbi(i,tag)) - math.log10(self.get_emission(index+1,tag,sentence))
+            except:
+                max_transition_complex[i] = self.complex_matrix_dict[index][i] - math.log10(self.get_transition_prob_viterbi(i,tag)) - math.log10(smooth_constant)
+
+        posprob = min(max_transition_complex.values())
+        return posprob
+
+    def get_max_viterbi_complex1(self,index,tag,sentence):
+        max_transition_complex = defaultdict(float)
+        viterbi_column = copy.deepcopy(self.complex_matrix_dict.get(index))
+
+        if viterbi_column == None:
+            return -math.log10(smooth_constant)
+
+        for i in viterbi_column:
+            try:
+                max_transition_complex[i] = self.complex_matrix_dict[index][i] - math.log10(self.get_transition_prob_complex(i,tag)) - math.log10(self.get_emission(index+2,tag,sentence))
+            except:
+
+                max_transition_complex[i] = self.complex_matrix_dict[index][i] - math.log10(self.get_transition_prob_complex(i,tag)) - math.log10(smooth_constant)
+
+        # posTag = sum(max_transition_complex, key=max_transition_viterbi.get)
+        posprob = min(max_transition_complex.values())
+        return posprob
+
+
     #Return transition probability given 2 tags
     def get_transition_prob_viterbi(self,i,tag):
         temp = 0
@@ -228,19 +363,37 @@ class Solver:
             return smooth_constant
         else : return temp
 
+    #Return transition probability given 2 tags
+    def get_transition_prob_complex(self,i,tag):
+        temp = 0
+        temp = float(self.transition_dict_complex[i][tag])/self.tag_occurence.get(tag)
+        if temp == 0.0:
+            return smooth_constant
+        else : return temp
+
+
     def backTrack_viterbi(self,sentence):
         n = len(sentence)
         max_last_col = self.viterbi_matrix_dict.get(n-1)
         tag = min(max_last_col, key=max_last_col.get)
-        # posprob = min(max_last_col.values())
         tagsequence = []
         tagsequence.insert(0,tag)
         for i in range(n-1,0,-1):
-            # print "vitebi matrix", self.viterbi_matrix_dict[i]
             tag = self.viterbi_matrix_dict[i][tag][1]
             tagsequence.insert(0,tag)
 
         return tagsequence
+
+    def backTrack_complex(self,sentence):
+        n = len(sentence)
+        tagsequence = []
+        for word in self.complex_matrix_dict:
+            temp = min(self.complex_matrix_dict[word], key=self.complex_matrix_dict[word].get)
+            tagsequence.append(temp)
+        return tagsequence
+
+
+
 
 
 
@@ -279,14 +432,18 @@ class Solver:
             value = -math.log10( self.get_initial_prob(tag_row))
 
             try:
+                # print "in try of hmm"
                 emission = -math.log10( self.get_emission(first_word,tag_row,sentence))
+                # print "emission",emission
                 temp = value + emission
                 self.viterbi_matrix_dict[first_word][tag_row][0] = temp
                 self.viterbi_matrix_dict[first_word][tag_row][1] = "start"
             except:
-                print "in except"
-
-
+                # print "sentence",sentence
+                # print "value",value
+                # print "in except"
+                print ""
+                # raw_input()
 
 
         #calculate the whole viterbi matrix
@@ -311,10 +468,77 @@ class Solver:
 
 
 
-
-
     def complex(self, sentence):
-        return [ [ [ "noun" ] * len(sentence)], [[0] * len(sentence),] ]
+
+        self.complex_matrix_dict = {}
+        sentence_copy = copy.deepcopy(sentence)
+        n = len(sentence)
+        temp_dict = {}
+        # Initialize a blank complex matrix
+        for index, word in enumerate(sentence_copy):
+            if index not in self.complex_matrix_dict:
+                self.complex_matrix_dict[index] = self.get_blank_dict()
+
+        # get the first word in the sentence
+        first_word = 0
+
+        # calculate the first column of the matrix
+        for tag_row in self.complex_matrix_dict[first_word]:
+            value = 0
+            emission = 0
+            value = -math.log10(self.get_initial_prob(tag_row))
+
+            try:
+                emission = -math.log10(self.get_emission(first_word, tag_row, sentence_copy))
+                temp = value + emission
+                self.complex_matrix_dict[first_word][tag_row] = temp
+            except:
+                print ""
+
+        #Calculate for second col of the matrix
+        if len(sentence_copy)== 1:
+            Tag_Sequence = tuple(self.backTrack_complex(sentence_copy))
+            return [ [ Tag_Sequence], [[0] * len(sentence_copy),] ]
+
+        for tag_row1 in self.complex_matrix_dict[1]:
+            max_transition = self.get_max_viterbi_complex(0, tag_row1, sentence_copy)
+            if max_transition == 0.0:
+                self.complex_matrix_dict[1][tag_row1] = -math.log10(smooth_constant)
+            else:
+                self.complex_matrix_dict[1][tag_row1] = (max_transition)
+
+
+
+        if len(sentence_copy)== 2:
+            Tag_Sequence = tuple(self.backTrack_complex(sentence_copy))
+            return [ [ Tag_Sequence], [[0] * len(sentence_copy),] ]
+
+
+        # calculate the whole viterbi matrix
+        max_transition = 0
+        for word_col in self.complex_matrix_dict:
+            if int(word_col) > 1:
+                for tag_row2 in self.complex_matrix_dict[word_col]:
+                    max_transition1 = self.get_max_viterbi_complex(word_col - 1, tag_row2, sentence_copy)
+                    max_transition2 = self.get_max_viterbi_complex1(word_col - 2, tag_row2, sentence_copy)
+                    max_transition = max_transition1 + max_transition2
+                    if max_transition == 0.0:
+                        self.complex_matrix_dict[word_col][tag_row2] = -math.log10(smooth_constant)
+                    else:
+                        self.complex_matrix_dict[word_col][tag_row2] = (max_transition)
+
+
+        Tag_Sequence = []
+        Complex_prob = []
+        Tag_Sequence = tuple(self.backTrack_complex(sentence_copy))
+        for word in self.complex_matrix_dict:
+            a = round(self.complex_matrix_dict[word][Tag_Sequence[word]]*smooth_constant,7)
+            Complex_prob.append(a)
+
+
+        return [ [ Tag_Sequence], [Complex_prob , ]]
+        # return [[["noun"] * len(sentence)], [[0] * len(sentence), ]]
+
 
 
     # This solve() method is called by label.py, so you should keep the interface the
