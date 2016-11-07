@@ -1,61 +1,60 @@
-###################################
-# CS B551 Fall 2016, Assignment #3
-#
-# Your names and user ids:
-# Mohit Galvankar mgalvank
-# Supreet S sushivan
-# Thanmai Bindia tbindi
-#
-# (Based on skeleton code by D. Crandall)
-#
-#
-####
-''''''''''
+# ###################################
+# # CS B551 Fall 2016, Assignment #3
+# #
+# # Your names and user ids:
+# # Mohit Galvankar mgalvank
+# # Supreet S sushivan
+# # Thanmai Bindia tbindi
+# #
+# # (Based on skeleton code by D. Crandall)
+# #
+# #
+# ####
+# ''''''''''
 
-# Report
+# # Report
 
-1.a)Initialized all the needed states
-Initial state = #Creates a dict of tags and number of times they occured at the start of the sentence.
-Emission state = #Creates a dict of all words in train data and the number of times they occurred as a tag = noun,verb,etc.
-Transition state =  #Creates a dict of all tag transitions combination : - noun to noun, noun to verb, etc
-All the above state tables are not probabilities just counts. Probabilities are calculated when needed.
+# 1.a)Initialized all the needed states
+# Initial state = #Creates a dict of tags and number of times they occured at the start of the sentence.
+# Emission state = #Creates a dict of all words in train data and the number of times they occurred as a tag = noun,verb,etc.
+# Transition state =  #Creates a dict of all tag transitions combination : - noun to noun, noun to verb, etc
+# All the above state tables are not probabilities just counts. Probabilities are calculated when needed.
 
-1.b)Simple model
-For simple model,given a sentence:
-    for each word in sentence:
-        for each tag :
-            calculate the max(no of times the word occured as a tag/no of times the word occured) and assign that tag to the word
-If word not in database, return a new tag as "na"
-
-
-1.c)HMM model
-Implemented a viterbi algorithm.
-Initialize a viterbi matrix of N x T where is N is the words in the sentence and T is the number of tags.
-This viterbi matrix is a dictionary of dictionary where each word is the main dictionary and has a dictionary with all tags as keys, assigned
-as values.
-Algorithm:-
-First compute the first col of the matrix.
-For each tag in the first word:
-    assigned that tag a value = initial probability of that tag * emission probability of that word
-
-For each word in viterbi matrix from the second word in sentence:
-    for each tag in each word:
-        compute max ( previous word value in word[tag] * transition probability from previous word[tag] to current word[tag] * emission probability of current word
-        also tag each state with the tag represented by the max calculated above inorder to backtrack.
-
-After the matrix is generated, backtrack from the last col in matrix and append all tags for each word and return tag tuple.
+# 1.b)Simple model
+# For simple model,given a sentence:
+#     for each word in sentence:
+#         for each tag :
+#             calculate the max(no of times the word occured as a tag/no of times the word occured) and assign that tag to the word
+# If word not in database, return a new tag as "na"
 
 
-1.d.)Complex model
-For complex model, computed the current word[tag] value based on the max of all the possible combination of tags in previous two words. Similar to viterbi but comparing last two words.
-Basically used a trigram model. Computed a 12x12 tag transition matrix for each word[tag] value computation and multipled each by that specific state probability
-and also the emission probability of current state.
+# 1.c)HMM model
+# Implemented a viterbi algorithm.
+# Initialize a viterbi matrix of N x T where is N is the words in the sentence and T is the number of tags.
+# This viterbi matrix is a dictionary of dictionary where each word is a key in the main dictionary and has it's own dictionary with all tags as it's keys.
+# Algorithm:-
+# First compute the first col of the matrix.
+# For each tag in the first word:
+#     assigned that tag a value = initial probability of that tag * emission probability of that word
 
-Reference :-
-Referred to below video for viterbi algorithm concept clearance :-
-https://www.youtube.com/watch?v=O_q82UMtjoM
-'''''''''
-####
+# For each word in viterbi matrix from the second word in sentence:
+#     for each tag in each word:
+#         compute max ( previous word value in word[tag] * transition probability from previous word[tag] to current word[tag] * emission probability of current word
+#         also tag each state with the tag represented by the max calculated above inorder to backtrack and get the pos sequence.
+
+# After the matrix is generated, backtrack from the last col in matrix and append all tags for each word and return tag tuple.
+
+
+# 1.d.)Complex model
+# For complex model, computed the current word[tag] value based on the max of all the possible combination of tags in previous two words. Similar to viterbi but comparing last two words.
+# Basically used a trigram model. Computed a 12x12 tag transition matrix for each word[tag] value computation and multipled each by that specific state probability
+# and also the emission probability of current state. Also tag each state with the tag represented by the max calculated above inorder to backtrack and get the pos sequence.
+
+# Reference :-
+# Referred to below video for viterbi algorithm concept clearance :-
+# https://www.youtube.com/watch?v=O_q82UMtjoM
+# '''''''''
+# ####
 
 import random
 import math
